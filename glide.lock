@@ -1,0 +1,12 @@
+hash: 1156c573f74844c7914488c4afa892c0d52e760faff920a3697bb58d0637314b
+updated: 2017-05-10T17:32:03.7359758+08:00
+imports:
+- name: github.com/daviddengcn/go-colortext
+  version: 805cee6e0d43c72ba1d4e3275965ff41e0da068a
+- name: github.com/lib/pq
+  version: 2704adc878c21e1329f46f6e56a1c387d788ff94
+  subpackages:
+  - oid
+- name: github.com/ttacon/chalk
+  version: 76b3c8b611dea8f83e49e9ce81fc2b189e0ef3d2
+testImports: []
