@@ -9,8 +9,11 @@ import (
 
 	"fmt"
 
+	"encoding/hex"
+
 	ct "github.com/daviddengcn/go-colortext"
 	pq "github.com/lib/pq"
+	b2b "github.com/minio/blake2b-simd"
 )
 
 // type ReqContent struct {
@@ -70,17 +73,37 @@ func (pg *pgManager) querySize() {
 
 }
 
-func (pg *pgManager) row(id uint64) {
+func (pg *pgManager) row(key []byte) {
 	var match string
 	pg.db.QueryRow(`SELECT match FROM $1`, "image").Scan(&match)
+	//cond & union query return requested num of URLs
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	//should be POST
 	validPath := regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 	m := validPath.FindStringSubmatch(r.URL.Path)
 	if m == nil {
 		http.NotFound(w, r)
 	} else {
+		//read JSON body
+		imageFile, imageFileHeader, err := r.FormFile("image-data")
+		if err != nil {
+			error(err.Error())
+			return
+		}
+		success(imageFileHeader.Filename)
+		//calc file hash
+		var imageData []byte
+		imageBytesLength, err := imageFile.Read(imageData)
+		if err != nil {
+			error(err.Error())
+			return
+		}
+		success("%d\n", imageBytesLength)
+		imageHash := b2b.Sum256(imageData)
+		success("%s\n", hex.EncodeToString(imageHash[:]))
+		//select from database
 		resData, _ := json.Marshal(resContent{ID: []string{"abc", "xyz"}, Size: 1})
 		w.Write(resData)
 	}

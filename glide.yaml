@@ -1,6 +1,5 @@
 package: qighliu29/animated-gif-bot
 import:
 - package: github.com/lib/pq
-- package: github.com/ttacon/chalk
-  version: ^0.1.0
 - package: github.com/daviddengcn/go-colortext
+- package: github.com/minio/blake2b-simd
