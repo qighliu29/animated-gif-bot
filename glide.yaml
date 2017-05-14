@@ -3,3 +3,5 @@ import:
 - package: github.com/lib/pq
 - package: github.com/daviddengcn/go-colortext
 - package: github.com/minio/blake2b-simd
+- package: github.com/google/uuid
+  version: ^0.2.0
