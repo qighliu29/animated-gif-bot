@@ -36,14 +36,14 @@ func imageInfo2IDURL(s []src.ImageInfo) []imgIDURL {
 }
 
 func gifHandler(w http.ResponseWriter, r *http.Request) {
-	rc := make(chan interface{})
+	c := make(chan interface{})
 	var img ps.Image
 	var cur src.ImageInfo
 	var vc int
 	m := make([]src.ImageInfo, 0, 10)
 
-	go ps.ParseGIF(r, rc)
-	switch t := <-rc; t.(type) {
+	go ps.ParseGIF(r, c)
+	switch t := <-c; t.(type) {
 	case ps.Image:
 		img = t.(ps.Image)
 	case error:
@@ -53,13 +53,11 @@ func gifHandler(w http.ResponseWriter, r *http.Request) {
 
 	h := b2b.Sum256(img.Data)
 	// success("%s\n", hex.EncodeToString(h[:]))
-	go src.MatchImages(h[:], rc)
-	for t := range rc {
+	go src.MatchImages(h[:], c)
+	for t := range c {
 		switch t.(type) {
 		case src.ImageInfo:
 			m = append(m, t.(src.ImageInfo))
-		case bool:
-			break
 		case error:
 			internalError(w, r)
 			return
@@ -82,18 +80,18 @@ func gifHandler(w http.ResponseWriter, r *http.Request) {
 		s := rand.NewSource(time.Now().UnixNano())
 		ran := rand.New(s)
 		n := ran.Int63n(int64(src.Size()/uint64(mr-1))) * int64(mr)
-		go src.NthImages(uint64(n), mr, rc)
-		for t := range rc {
+		c := make(chan interface{})
+		go src.NthImages(uint64(n), mr, c)
+		for t := range c {
 			switch t.(type) {
 			case src.ImageInfo:
 				m = append(m, t.(src.ImageInfo))
-			case bool:
-				break
 			case error:
 				internalError(w, r)
 				return
 			}
 		}
+		// success("marigin %d images\n", mr)
 	}
 	rd, err := json.Marshal(resGIF{ID: cur.ID.String(), MatchArray: imageInfo2IDURL(m), MatchCount: vc})
 	if err != nil {

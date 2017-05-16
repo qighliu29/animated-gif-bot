@@ -23,7 +23,7 @@ var rc uint64
 func init() {
 	var err error
 	//panic if cannot connect to pg
-	db, err = sql.Open("postgres", fmt.Sprintf("host=127.0.0.1 dbname=%s user=%s password=%s", os.Getenv("PG_DATABASE"), os.Getenv("PG_USERNAME"), os.Getenv("PG_PASSWORD")))
+	db, err = sql.Open("postgres", fmt.Sprintf("host=192.168.1.90 dbname=%s user=%s password=%s sslmode=disable", os.Getenv("PG_DATABASE"), os.Getenv("PG_USERNAME"), os.Getenv("PG_PASSWORD")))
 	if err = db.Ping(); err != nil {
 		panic(err)
 	}
@@ -42,7 +42,8 @@ func Size() uint64 {
 
 // MatchImages returns matched gif url to a specific gif
 func MatchImages(h []byte, c chan<- interface{}) {
-	rows, err := db.Query(`SELECT id, url FROM gif WHERE id = ANY(SELECT match FROM gif WHERE img_hash = $1)`, h)
+	// 2 solutions combine ANY with ARRAY RETURNED by SUBSELECT: https://dba.stackexchange.com/questions/90460/how-to-do-an-anyselect-query-in-postgresql
+	rows, err := db.Query(`SELECT id, url FROM gif WHERE array[id] <@ (SELECT match FROM gif WHERE img_hash = $1)`, h)
 	if err != nil {
 		c <- errors.New("Query match URL failed")
 		return
@@ -58,7 +59,7 @@ func MatchImages(h []byte, c chan<- interface{}) {
 		c <- errors.New("Rows iteration failed in MatchURLs")
 	} else {
 		// iteration done without error
-		c <- true
+		close(c)
 	}
 }
 
@@ -80,7 +81,7 @@ func NthImages(o uint64, l int, c chan<- interface{}) {
 		c <- errors.New("Rows iteration failed in NthURLs")
 	} else {
 		// iteration done without error
-		c <- true
+		close(c)
 	}
 }
 

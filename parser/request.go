@@ -62,6 +62,7 @@ func ParseGIF(r *http.Request, c chan<- interface{}) {
 		}
 		img.Format = "image/gif"
 		c <- img
+		return
 	}
 	c <- err
 }
