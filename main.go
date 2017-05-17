@@ -35,6 +35,20 @@ func imageInfo2IDURL(s []src.ImageInfo) []imgIDURL {
 	return res
 }
 
+func waitOnChan(c <-chan interface{}, cb func(interface{}) bool) error {
+	for t := range c {
+		switch t.(type) {
+		case error:
+			return t.(error)
+		default:
+			if !cb(t) {
+				return nil
+			}
+		}
+	}
+	return nil
+}
+
 func gifHandler(w http.ResponseWriter, r *http.Request) {
 	c := make(chan interface{})
 	var img ps.Image
@@ -43,10 +57,17 @@ func gifHandler(w http.ResponseWriter, r *http.Request) {
 	m := make([]src.ImageInfo, 0, 10)
 
 	go ps.ParseGIF(r, c)
-	switch t := <-c; t.(type) {
-	case ps.Image:
-		img = t.(ps.Image)
-	case error:
+	// switch t := <-c; t.(type) {
+	// case ps.Image:
+	// 	img = t.(ps.Image)
+	// case error:
+	// 	badRequest(w, r)
+	// 	return
+	// }
+	if err := waitOnChan(c, func(arg interface{}) bool {
+		img = arg.(ps.Image)
+		return false
+	}); err != nil {
 		badRequest(w, r)
 		return
 	}
@@ -54,14 +75,21 @@ func gifHandler(w http.ResponseWriter, r *http.Request) {
 	h := b2b.Sum256(img.Data)
 	// success("%s\n", hex.EncodeToString(h[:]))
 	go src.MatchImages(h[:], c)
-	for t := range c {
-		switch t.(type) {
-		case src.ImageInfo:
-			m = append(m, t.(src.ImageInfo))
-		case error:
-			internalError(w, r)
-			return
-		}
+	// for t := range c {
+	// 	switch t.(type) {
+	// 	case src.ImageInfo:
+	// 		m = append(m, t.(src.ImageInfo))
+	// 	case error:
+	// 		internalError(w, r)
+	// 		return
+	// 	}
+	// }
+	if err := waitOnChan(c, func(arg interface{}) bool {
+		m = append(m, arg.(src.ImageInfo))
+		return true
+	}); err != nil {
+		internalError(w, r)
+		return
 	}
 
 	if len(m) == 0 {
