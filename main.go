@@ -1,94 +1,70 @@
 package main
 
 import (
-	"encoding/json"
 	"math/rand"
 	"net/http"
 	"time"
 
 	b2b "github.com/minio/blake2b-simd"
-	ps "github.com/qighliu29/animated-gif-bot/parser"
-	src "github.com/qighliu29/animated-gif-bot/source"
 )
 
-type imgIDURL struct {
-	ID  string
-	URL string
+var repo pgImageRepo
+
+func init() {
+	repo.connect()
 }
 
-type resGIF struct {
-	ID         string
-	MatchArray []imgIDURL
-	MatchCount int
-}
-
-type resMatch struct {
-	Message string
-}
-
-func imageInfo2IDURL(s []src.ImageInfo) []imgIDURL {
-	res := make([]imgIDURL, 0, len(s))
+func imageInfo2IDURL(s []imageRow) []interface{} {
+	res := make([]interface{}, 0, len(s))
 	for _, i := range s {
-		res = append(res, imgIDURL{ID: i.ID.String(), URL: i.URL})
+		res = append(res, struct {
+			ID  string
+			URL string
+		}{ID: i.ID.String(), URL: i.URL})
 	}
 
 	return res
 }
 
-func waitOnChan(c <-chan interface{}, cb func(interface{}) bool) error {
-	for t := range c {
-		switch t.(type) {
-		case error:
-			return t.(error)
-		default:
-			if !cb(t) {
-				return nil
-			}
-		}
+func randomImageN(n int) ([]imageRow, error) {
+	m := make([]imageRow, 0, n)
+
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	o := r.Int63n(int64(repo.size()/uint64(n-1))) * int64(n)
+	c := make(chan interface{})
+	go repo.nthImages(uint64(o), n, c)
+	if err := readChanUntilClose(c, func(arg interface{}) {
+		m = append(m, arg.(imageRow))
+	}); err != nil {
+		return nil, err
 	}
-	return nil
+	// success("marigin %d images\n", n)
+	return m, nil
 }
 
 func gifHandler(w http.ResponseWriter, r *http.Request) {
-	c := make(chan interface{})
-	var img ps.Image
-	var cur src.ImageInfo
-	var vc int
-	m := make([]src.ImageInfo, 0, 10)
+	var req imageReq
+	var cur imageRow
+	m := make([]imageRow, 0, 10)
 
-	go ps.ParseGIF(r, c)
-	// switch t := <-c; t.(type) {
-	// case ps.Image:
-	// 	img = t.(ps.Image)
-	// case error:
-	// 	badRequest(w, r)
-	// 	return
-	// }
-	if err := waitOnChan(c, func(arg interface{}) bool {
-		img = arg.(ps.Image)
-		return false
+	c := make(chan interface{})
+	go parseGIFReq(r, c)
+	if err := readChanUntilClose(c, func(arg interface{}) {
+		req = arg.(imageReq)
 	}); err != nil {
-		badRequest(w, r)
+		resBadRequest(w)
 		return
 	}
 
-	h := b2b.Sum256(img.Data)
+	h := b2b.Sum512(req.Data)
 	// success("%s\n", hex.EncodeToString(h[:]))
-	go src.MatchImages(h[:], c)
-	// for t := range c {
-	// 	switch t.(type) {
-	// 	case src.ImageInfo:
-	// 		m = append(m, t.(src.ImageInfo))
-	// 	case error:
-	// 		internalError(w, r)
-	// 		return
-	// 	}
-	// }
-	if err := waitOnChan(c, func(arg interface{}) bool {
-		m = append(m, arg.(src.ImageInfo))
-		return true
+	c = make(chan interface{})
+	go repo.matchImages(h[:], c)
+	if err := readChanUntilClose(c, func(arg interface{}) {
+		m = append(m, arg.(imageRow))
 	}); err != nil {
-		internalError(w, r)
+		resInternalError(w)
 		return
 	}
 
@@ -96,64 +72,52 @@ func gifHandler(w http.ResponseWriter, r *http.Request) {
 		// gif does not exist, upload to OSS & set callback
 		// wait it complete
 	} else {
-		cur = m[1]
+		cur = m[0]
 		m = m[1:]
 	}
 
-	vf, ve := intersec(0, len(m), img.From, img.From+img.Length)
+	vf, ve := intersec(0, len(m), req.From, req.From+req.Length)
 	m = m[vf:ve]
-	vc = len(m)
-	if vc < img.Length {
-		mr := img.Length - vc
-		s := rand.NewSource(time.Now().UnixNano())
-		ran := rand.New(s)
-		n := ran.Int63n(int64(src.Size()/uint64(mr-1))) * int64(mr)
-		c := make(chan interface{})
-		go src.NthImages(uint64(n), mr, c)
-		for t := range c {
-			switch t.(type) {
-			case src.ImageInfo:
-				m = append(m, t.(src.ImageInfo))
-			case error:
-				internalError(w, r)
-				return
-			}
+	mc := len(m)
+	if mc < req.Length {
+		if ri, err := randomImageN(req.Length - mc); err == nil {
+			m = append(m, ri...)
+		} else {
+			resInternalError(w)
+			return
 		}
-		// success("marigin %d images\n", mr)
 	}
-	rd, err := json.Marshal(resGIF{ID: cur.ID.String(), MatchArray: imageInfo2IDURL(m), MatchCount: vc})
-	if err != nil {
-		internalError(w, r)
-	} else {
-		w.Write(rd)
-	}
+
+	resData(w, struct {
+		ID         string
+		MatchArray []interface{}
+		MatchCount int
+	}{ID: cur.ID.String(), MatchArray: imageInfo2IDURL(m), MatchCount: mc})
 }
 
 func matchHandler(w http.ResponseWriter, r *http.Request) {
+	var req matchReq
+
 	c := make(chan interface{})
-	var m ps.Match
-
-	go ps.ParseMatch(r, c)
-	switch t := <-c; t.(type) {
-	case ps.Match:
-		m = t.(ps.Match)
-	case error:
-		badRequest(w, r)
+	go parseMatchReq(r, c)
+	if err := readChanUntilClose(c, func(arg interface{}) {
+		req = arg.(matchReq)
+	}); err != nil {
+		resBadRequest(w)
 		return
 	}
 
-	go src.NewMatch(m.Home, m.Away, m.Submitter, c)
-	switch t := <-c; t.(type) {
-	case error:
-		internalError(w, r)
+	c = make(chan interface{})
+	go repo.newMatch(req.Home, req.Away, req.Submitter, c)
+	if err := readChanUntilClose(c, func(arg interface{}) {}); err != nil {
+		resInternalError(w)
 		return
 	}
-	rd, _ := json.Marshal(resMatch{Message: "OK"})
-	w.Write(rd)
+
+	resOK(w)
 }
 
 func main() {
-	// launch http server
 	http.HandleFunc("/gif", handleWithMethod("POST", gifHandler))
 	http.HandleFunc("/match", handleWithMethod("POST", matchHandler))
 	http.ListenAndServe(":8080", nil)

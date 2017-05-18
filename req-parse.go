@@ -1,4 +1,4 @@
-package parser
+package main
 
 import (
 	"errors"
@@ -9,25 +9,25 @@ import (
 	"github.com/google/uuid"
 )
 
-// Image represents request image information
-type Image struct {
+type imageReq struct {
 	Data   []byte
 	From   int
 	Length int
 	Format string
 }
 
-// Match represents request match information
-type Match struct {
+type matchReq struct {
 	Home      uuid.UUID
 	Away      uuid.UUID
 	Submitter string
 }
 
-// ParseGIF parses the 'gif' request
-func ParseGIF(r *http.Request, c chan<- interface{}) {
-	var img Image
+func parseGIFReq(r *http.Request, c chan<- interface{}) {
+	var ir imageReq
 	var err error
+
+	defer close(c)
+
 	for {
 		if r.ContentLength > (1 << 19) {
 			err = errors.New("Body too large")
@@ -37,11 +37,11 @@ func ParseGIF(r *http.Request, c chan<- interface{}) {
 			err = errors.New("Body too large")
 			break
 		}
-		if img.From, err = strconv.Atoi(r.FormValue("from")); err != nil {
+		if ir.From, err = strconv.Atoi(r.FormValue("from")); err != nil {
 			err = errors.New("No field from")
 			break
 		}
-		if img.Length, err = strconv.Atoi(r.FormValue("length")); err != nil {
+		if ir.Length, err = strconv.Atoi(r.FormValue("length")); err != nil {
 			err = errors.New("No field length")
 			break
 		}
@@ -51,44 +51,47 @@ func ParseGIF(r *http.Request, c chan<- interface{}) {
 			break
 		}
 		defer f.Close()
-		img.Data, err = ioutil.ReadAll(f)
+		ir.Data, err = ioutil.ReadAll(f)
 		if err != nil {
 			err = errors.New("Load file failed")
 			break
 		}
-		if http.DetectContentType(img.Data) != "image/gif" {
+		if http.DetectContentType(ir.Data) != "image/gif" {
 			err = errors.New("Image is not GIF")
 			break
 		}
-		img.Format = "image/gif"
-		c <- img
+		ir.Format = "image/gif"
+		c <- ir
 		return
 	}
 	c <- err
 }
 
-// ParseMatch parses the 'match' request
-func ParseMatch(r *http.Request, c chan<- interface{}) {
-	var m Match
+func parseMatchReq(r *http.Request, c chan<- interface{}) {
+	var mr matchReq
+
+	defer close(c)
+
 	var err error
 	for {
 		if err = r.ParseMultipartForm(1 << 19); err != nil {
 			err = errors.New("Body too large")
 			break
 		}
-		if m.Home, err = uuid.Parse(r.FormValue("home")); err != nil {
+		if mr.Home, err = uuid.Parse(r.FormValue("home")); err != nil {
 			err = errors.New("No field home")
 			break
 		}
-		if m.Away, err = uuid.Parse(r.FormValue("away")); err != nil {
+		if mr.Away, err = uuid.Parse(r.FormValue("away")); err != nil {
 			err = errors.New("No field away")
 			break
 		}
-		if m.Submitter = r.FormValue("user-identifier"); m.Submitter == "" {
+		if mr.Submitter = r.FormValue("user-identifier"); mr.Submitter == "" {
 			err = errors.New("No field user-identifier")
 			break
 		}
-		c <- m
+		c <- mr
+		return
 	}
 	c <- err
 }
