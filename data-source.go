@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -20,14 +19,10 @@ type imageRow struct {
 	URL string
 }
 
-func (repo *pgImageRepo) connect() {
+func (repo *pgImageRepo) connect(h string, d string, u string, p string) {
 	var err error
 	//panic if cannot connect to pg
-	repo.db, err = sql.Open("postgres", fmt.Sprintf("host=%s dbname=%s user=%s password=%s sslmode=disable",
-		os.Getenv("PG_HOST"),
-		os.Getenv("PG_DATABASE"),
-		os.Getenv("PG_USERNAME"),
-		os.Getenv("PG_PASSWORD")))
+	repo.db, err = sql.Open("postgres", fmt.Sprintf("host=%s dbname=%s user=%s password=%s sslmode=disable", h, d, u, p))
 	if err = repo.db.Ping(); err != nil {
 		panic(err)
 	}

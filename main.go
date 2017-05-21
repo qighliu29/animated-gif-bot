@@ -5,13 +5,21 @@ import (
 	"net/http"
 	"time"
 
+	"flag"
+
 	b2b "github.com/minio/blake2b-simd"
 )
+
+var dbhost = flag.String("h", "127.0.0.1", "the host name of the machine on which the database server is running")
+var dbname = flag.String("d", "agb", "the name of the image database")
+var dbuser = flag.String("u", "agb", "the username which will be used to connect to the image database")
+var dbpwd = flag.String("p", "agbpassword", "the password which will be used to connect to the image database")
+var cors = flag.String("c", "*", "the \"Access-Control-Allow-Origin\" field will be set in response headers")
 
 var repo pgImageRepo
 
 func init() {
-	repo.connect()
+	repo.connect(*dbhost, *dbname, *dbuser, *dbpwd)
 }
 
 func imageInfo2IDURL(s []imageRow) []interface{} {
@@ -28,9 +36,10 @@ func imageInfo2IDURL(s []imageRow) []interface{} {
 
 func randomImageN(n int) ([]imageRow, error) {
 	m := make([]imageRow, 0, n)
-
+	// success("request %d images\n", n)
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
+	// seems to have BUG: cannot generate enough row
 	o := r.Int63n(int64(repo.size()/uint64(n-1))) * int64(n)
 	c := make(chan interface{})
 	go repo.nthImages(uint64(o), n, c)
@@ -39,7 +48,7 @@ func randomImageN(n int) ([]imageRow, error) {
 	}); err != nil {
 		return nil, err
 	}
-	// success("marigin %d images\n", n)
+	// success("marigin %d images\n", len(m))
 	return m, nil
 }
 
@@ -118,6 +127,9 @@ func matchHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	flag.Parse()
+	setCORSHeader(*cors)
+
 	http.HandleFunc("/gif", handleWithMethod("POST", gifHandler))
 	http.HandleFunc("/match", handleWithMethod("POST", matchHandler))
 	http.ListenAndServe(":8080", nil)

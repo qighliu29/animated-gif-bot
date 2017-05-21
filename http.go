@@ -5,6 +5,12 @@ import (
 	"net/http"
 )
 
+var acao string
+
+func setCORSHeader(c string) {
+	acao = c
+}
+
 func resJSON(w http.ResponseWriter, o interface{}) {
 	var bs []byte
 	var err error
@@ -12,6 +18,7 @@ func resJSON(w http.ResponseWriter, o interface{}) {
 		failed("[resJSON] Marshal failed: %s", err.Error())
 		return
 	}
+	w.Header().Set("Access-Control-Allow-Origin", acao)
 	if _, err = w.Write(bs); err != nil {
 		failed("[resJSON] Write failed: %s", err.Error())
 	}
