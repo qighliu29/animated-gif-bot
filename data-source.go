@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 type pgImageRepo struct {
@@ -65,9 +65,9 @@ func (repo *pgImageRepo) newImage(id uuid.UUID, sz int, hb []byte, c chan<- inte
 	_, err := repo.db.Exec(`INSERT INTO gif VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, LOCALTIMESTAMP, LOCALTIMESTAMP)`,
 		id,
 		"http://agb-image.oss-cn-shenzhen.aliyuncs.com/"+id.String()+".gif",
-		[]string{},
-		[]int{},
-		[]uuid.UUID{id},
+		pq.Array([]string{}),
+		pq.Array([]int{}),
+		pq.Array([]uuid.UUID{id}),
 		sz,
 		"gif",
 		hb,

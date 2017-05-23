@@ -22,18 +22,13 @@ var as = flag.String("s", "", "AccessKeySecret used to access OSS endpoint")
 var repo pgImageRepo
 var oc ossClient
 
-func init() {
-	repo.connect(*dbhost, *dbname, *dbuser, *dbpwd)
-	oc.init(*ak, *as)
-}
-
 func imageInfo2IDURL(s []imageRow) []interface{} {
 	res := make([]interface{}, 0, len(s))
 	for _, i := range s {
 		res = append(res, struct {
 			ID  string
 			URL string
-		}{ID: i.ID.String(), URL: i.URL})
+		}{ID: i.ID.String(), URL: oc.signURL(i.URL, i.ID.String()+".gif")})
 	}
 
 	return res
@@ -151,6 +146,8 @@ func matchHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	flag.Parse()
+	repo.connect(*dbhost, *dbname, *dbuser, *dbpwd)
+	oc.init(*ak, *as)
 	setCORSHeader(*cors)
 
 	http.HandleFunc("/gif", handleWithMethod("POST", gifHandler))
