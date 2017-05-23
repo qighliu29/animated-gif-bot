@@ -9,6 +9,7 @@
 
 # Ignore exe
 *.exe
+*.bat
 
 ### Above combination will ignore all files without extension ###
 
