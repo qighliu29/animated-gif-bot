@@ -1,6 +1,10 @@
-hash: 5fc3d7ea2c0f9ac22d41dff0aaf9cc7bfb7986dce141f64a85fbf7fb3cac1ec6
-updated: 2017-05-12T23:15:00.313558186+08:00
+hash: 466de20b72e74b22e2d3990e9874353d5141b5d959da2a55d2a67d22923f0591
+updated: 2017-05-23T15:39:00.4743853+08:00
 imports:
+- name: github.com/aliyun/aliyun-oss-go-sdk
+  version: e6dbea820a9f304b43d3b357dd48ced23b86df72
+  subpackages:
+  - oss
 - name: github.com/daviddengcn/go-colortext
   version: 805cee6e0d43c72ba1d4e3275965ff41e0da068a
 - name: github.com/google/uuid

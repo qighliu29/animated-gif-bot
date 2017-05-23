@@ -59,6 +59,24 @@ func (repo *pgImageRepo) matchImages(h []byte, c chan<- interface{}) {
 	}
 }
 
+func (repo *pgImageRepo) newImage(id uuid.UUID, sz int, hb []byte, c chan<- interface{}) {
+	defer close(c)
+
+	_, err := repo.db.Exec(`INSERT INTO gif VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, LOCALTIMESTAMP, LOCALTIMESTAMP)`,
+		id,
+		"http://agb-image.oss-cn-shenzhen.aliyuncs.com/"+id.String()+".gif",
+		[]string{},
+		[]int{},
+		[]uuid.UUID{id},
+		sz,
+		"gif",
+		hb,
+		"app-server")
+	if err != nil {
+		c <- errors.New("Exec failed in newImage: " + err.Error())
+	}
+}
+
 func (repo *pgImageRepo) nthImages(o uint64, l int, c chan<- interface{}) {
 	defer close(c)
 

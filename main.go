@@ -7,6 +7,7 @@ import (
 
 	"flag"
 
+	"github.com/google/uuid"
 	b2b "github.com/minio/blake2b-simd"
 )
 
@@ -15,11 +16,15 @@ var dbname = flag.String("d", "agb", "the name of the image database")
 var dbuser = flag.String("u", "agb", "the username which will be used to connect to the image database")
 var dbpwd = flag.String("p", "agbpassword", "the password which will be used to connect to the image database")
 var cors = flag.String("c", "*", "the \"Access-Control-Allow-Origin\" field will be set in response headers")
+var ak = flag.String("k", "", "AccessKeyId used to access OSS endpoint")
+var as = flag.String("s", "", "AccessKeySecret used to access OSS endpoint")
 
 var repo pgImageRepo
+var oc ossClient
 
 func init() {
 	repo.connect(*dbhost, *dbname, *dbuser, *dbpwd)
+	oc.init(*ak, *as)
 }
 
 func imageInfo2IDURL(s []imageRow) []interface{} {
@@ -52,6 +57,21 @@ func randomImageN(n int) ([]imageRow, error) {
 	return m, nil
 }
 
+func newImageRow(id uuid.UUID, data []byte, hash []byte) error {
+	c := make(chan interface{})
+	go oc.upload(id.String()+".gif", data, c)
+	if err := readChanUntilClose(c, func(arg interface{}) {}); err != nil {
+		return err
+	}
+	c = make(chan interface{})
+	go repo.newImage(id, len(data), hash, c)
+	if err := readChanUntilClose(c, func(arg interface{}) {}); err != nil {
+		oc.delete(id.String() + ".gif")
+		return err
+	}
+	return nil
+}
+
 func gifHandler(w http.ResponseWriter, r *http.Request) {
 	var req imageReq
 	var cur imageRow
@@ -78,8 +98,11 @@ func gifHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(m) == 0 {
-		// gif does not exist, upload to OSS & set callback
-		// wait it complete
+		cur.ID = uuid.New()
+		if err := newImageRow(cur.ID, req.Data, h[:]); err != nil {
+			resInternalError(w)
+			return
+		}
 	} else {
 		cur = m[0]
 		m = m[1:]
