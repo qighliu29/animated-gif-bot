@@ -39,8 +39,7 @@ func randomImageN(n int) ([]imageRow, error) {
 	// success("request %d images\n", n)
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	// seems to have BUG: cannot generate enough row
-	o := r.Int63n(int64(repo.size()/uint64(n-1))) * int64(n)
+	o := r.Int63n(int64(repo.size() - uint64(n) + 1))
 	c := make(chan interface{})
 	go repo.nthImages(uint64(o), n, c)
 	if err := readChanUntilClose(c, func(arg interface{}) {
