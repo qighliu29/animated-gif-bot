@@ -1,0 +1,12 @@
+language: go
+sudo: false
+go:
+  - 1.8.1
+os:
+  - linux
+before_install:
+  - go get github.com/Masterminds/glide
+install:
+  - glide install
+script:
+  - go build
